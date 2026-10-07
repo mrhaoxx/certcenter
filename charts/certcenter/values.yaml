@@ -58,8 +58,9 @@ persistence:
     path: /var/lib/certcenter
     type: DirectoryOrCreate
     # The image runs as uid 65532 and a freshly created host directory is
-    # root-owned, so an init container chowns it first. Disable if the
-    # directory is already writable by that uid.
+    # root-owned, so an init container chowns it to that uid first. This is
+    # CertCenter's own directory, nothing else lives there. Skipped when
+    # the pod runs as root (see localDeploy.runAsRoot).
     fixPermissions: true
 
 # ─── Local deployment ───────────────────────────────────────────────────
@@ -73,10 +74,16 @@ localDeploy:
   #    hostPath: /etc/nginx/certs
   #    mountPath: /host/nginx-certs
   #    type: DirectoryOrCreate
-  # chown each directory to uid 65532 at startup (same caveat as above).
-  fixPermissions: false
+  # Run CertCenter as root. local_write creates a temporary file in the
+  # target directory and renames it into place, so the directory has to be
+  # writable and the result is owned by whatever uid CertCenter runs as.
+  # Those directories belong to the services reading them (nginx, haproxy)
+  # and the chart will not change their ownership; the files that land in
+  # /etc/nginx/certs should be root-owned like anything else there. Turn
+  # this on when using hostPaths.
+  runAsRoot: false
 
-# Image used by the permission-fixing init containers.
+# Image used by the init container that chowns a hostPath data directory.
 initImage:
   repository: busybox
   tag: "1.37"

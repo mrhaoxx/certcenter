@@ -12,7 +12,7 @@ persistence:
   hostPath:
     path: /srv/certcenter
 localDeploy:
-  fixPermissions: true
+  runAsRoot: true
   hostPaths:
     - name: nginx
       hostPath: /etc/nginx/certs

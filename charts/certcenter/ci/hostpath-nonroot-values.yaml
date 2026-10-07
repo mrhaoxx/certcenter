@@ -1,0 +1,5 @@
+# Lint/template fixture: hostPath data, non-root, so the chown init runs.
+config:
+  sessionKey: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+persistence:
+  type: hostPath

@@ -76,16 +76,16 @@ helm install certcenter oci://ghcr.io/mrhaoxx/charts/certcenter --version 0.1.2 
 
 只有 `config.sessionKey` 是必填的；不填 `passwordHash` 则首次登录密码为 `admin`。`config.toml` 由 chart 渲染进 Secret，也可以用 `existingSecret` 指向自己维护的 Secret（键名 `config.toml`）。开启 `ingress` 后 `-external-url` 会自动按 ingress 的 host 推导。
 
-**存储**：`persistence.type` 可选 `pvc`（默认）、`hostPath` 或 `emptyDir`。hostPath 把数据库放在节点目录里，方便从宿主机备份，代价是 Pod 固定在那个节点，记得配 `nodeSelector`。镜像以 uid 65532 运行，chart 会用一个 init 容器把新建的宿主目录 chown 过去。
+**存储**：`persistence.type` 可选 `pvc`（默认）、`hostPath` 或 `emptyDir`。hostPath 把数据库放在节点目录里，方便从宿主机备份，代价是 Pod 固定在那个节点，记得配 `nodeSelector`。镜像以 uid 65532 运行，chart 会用一个 init 容器把新建的数据目录 chown 过去——只动这一个目录。
 
-**本地部署**：`localDeploy.hostPaths` 把节点上的目录挂进容器，流水线里的 `local_write` 步骤就能把证书直接写到宿主机，比如给跑在节点上的 nginx 用：
+**本地部署**：`localDeploy.hostPaths` 把节点上的目录挂进容器，流水线里的 `local_write` 步骤就能把证书直接写到宿主机，比如给跑在节点上的 nginx 用。这些目录属于读它们的服务，chart 不会改它们的属主；`local_write` 写出的文件属主是 CertCenter 的运行 uid，所以配合 `localDeploy.runAsRoot: true` 以 root 运行，落到 `/etc/nginx/certs` 里的文件就和手工放进去的一样是 root 所有：
 
 ```yaml
 persistence:
   type: hostPath
   hostPath: { path: /var/lib/certcenter }
 localDeploy:
-  fixPermissions: true
+  runAsRoot: true
   hostPaths:
     - name: nginx
       hostPath: /etc/nginx/certs

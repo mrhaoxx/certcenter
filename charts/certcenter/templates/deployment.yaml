@@ -1,5 +1,5 @@
-{{- $fixData := and (eq .Values.persistence.type "hostPath") .Values.persistence.hostPath.fixPermissions -}}
-{{- $fixLocal := and .Values.localDeploy.fixPermissions (gt (len .Values.localDeploy.hostPaths) 0) -}}
+{{- $root := .Values.localDeploy.runAsRoot -}}
+{{- $fixData := and (eq .Values.persistence.type "hostPath") .Values.persistence.hostPath.fixPermissions (not $root) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,49 +40,54 @@ spec:
       priorityClassName: {{ . }}
       {{- end }}
       securityContext:
+        {{- if $root }}
+        {{- /* localDeploy.runAsRoot: files written to host directories must be root-owned.
+               Built with set rather than merge: Sprig's merge treats 0 and false as empty
+               and would let the non-root values win. */}}
+        {{- $sc := omit .Values.podSecurityContext "fsGroup" "runAsUser" "runAsGroup" "runAsNonRoot" }}
+        {{- $_ := set $sc "runAsUser" 0 }}
+        {{- $_ := set $sc "runAsGroup" 0 }}
+        {{- $_ := set $sc "runAsNonRoot" false }}
+        {{- toYaml $sc | nindent 8 }}
+        {{- else }}
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if or $fixData $fixLocal }}
+        {{- end }}
+      {{- if $fixData }}
       initContainers:
-        # Host directories are created root-owned; hand them to the uid the
-        # service runs as. Runs as root only for this one step.
-        - name: fix-permissions
+        # A freshly created hostPath directory is root-owned; hand
+        # CertCenter's own data directory to the uid it runs as. Only this
+        # directory is touched, and only this step runs as root.
+        - name: chown-data
           image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
           imagePullPolicy: {{ .Values.initImage.pullPolicy }}
           securityContext:
             runAsUser: 0
             runAsNonRoot: false
           command:
-            - sh
-            - -c
-            - |
-              set -e
-              {{- if $fixData }}
-              chown {{ .Values.podSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.runAsGroup }} /data
-              chmod 700 /data
-              {{- end }}
-              {{- if $fixLocal }}
-              {{- range .Values.localDeploy.hostPaths }}
-              chown {{ $.Values.podSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.runAsGroup }} {{ .mountPath | quote }}
-              {{- end }}
-              {{- end }}
+            - chown
+            - "{{ .Values.podSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.runAsGroup }}"
+            - /data
           volumeMounts:
-            {{- if $fixData }}
             - name: data
               mountPath: /data
-            {{- end }}
-            {{- if $fixLocal }}
-            {{- range .Values.localDeploy.hostPaths }}
-            - name: local-{{ .name }}
-              mountPath: {{ .mountPath | quote }}
-            {{- end }}
-            {{- end }}
       {{- end }}
       containers:
         - name: certcenter
           image: {{ include "certcenter.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
+            {{- if $root }}
+            {{- /* Root with every capability dropped still cannot write into a directory
+                   owned by another user (haproxy:haproxy 0750, say); keep the three that
+                   make root able to drop a file anywhere on the host. */}}
+            {{- $csc := deepCopy .Values.securityContext }}
+            {{- $caps := default (dict) $csc.capabilities }}
+            {{- $_ := set $caps "add" (concat (default (list) $caps.add) (list "DAC_OVERRIDE" "CHOWN" "FOWNER") | uniq) }}
+            {{- $_ := set $csc "capabilities" $caps }}
+            {{- toYaml $csc | nindent 12 }}
+            {{- else }}
             {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- end }}
           args:
             - -config
             - /etc/certcenter/config.toml
