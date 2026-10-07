@@ -1,0 +1,40 @@
+services:
+  certcenter:
+    # Published multi-arch (amd64, arm64). Swap for `build: .` to run your
+    # own tree; the image builds its own frontend either way, so neither
+    # path needs Go or Node on the host.
+    image: ghcr.io/mrhaoxx/certcenter:latest
+    container_name: certcenter
+    restart: unless-stopped
+    ports:
+      # Only the console needs this. Validation is DNS-01, so the CA never
+      # connects here and the service does not belong on the internet.
+      - "3001:3001"
+    volumes:
+      # Everything that cannot be regenerated: the SQLite database holding
+      # ACME account keys, DNS and deploy credentials and certificate
+      # private keys, alongside config.toml.
+      - ./data:/data
+    healthcheck:
+      # The runtime image is distroless — no shell, no curl — so the binary
+      # probes itself.
+      test: ["CMD", "/usr/local/bin/certcenter", "-config", "/data/config.toml", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    # Behind a reverse proxy, name the external URL: it turns on Secure
+    # cookies and the Origin check.
+    # command: ["-config", "/data/config.toml", "-external-url", "https://certs.example.com"]
+
+# Deploying to targets on another Docker network — a ServerAgent bus, say —
+# means joining it. The network has to exist already.
+#
+# services:
+#   certcenter:
+#     networks: [default, serveragent]
+# networks:
+#   serveragent:
+#     external: true
+#     name: serveragent_default

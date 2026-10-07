@@ -1,0 +1,30 @@
+[server]
+host = "0.0.0.0"
+port = 3001
+
+[database]
+path = "certcenter.db"
+
+[auth]
+# HMAC key for session tokens; at least 32 bytes.
+# Generate with: openssl rand -hex 32
+session_key = "change-this-to-a-random-secret-string"
+username = "admin"
+# Seeds the admin password on first boot only — afterwards the database is
+# authoritative and changing the password here has no effect.
+#
+# The hash below is the password "admin" (verified). CHANGE IT before
+# exposing the service. Generate a replacement with:
+#   htpasswd -nbBC 12 "" "your-password" | cut -d: -f2
+password_hash = "$2b$12$frYPFyn9.CpYoHj6aHLe6.jFGKC9a8DjotMrNuVhNgk5hjY3IOJJy"
+
+[dns_verification]
+# skip = false
+# doh_server = "https://cloudflare-dns.com/dns-query"
+# max_retries = 12
+
+# [bus]
+# url = "ws://serveragent:9900/ws"
+# service_id = "certcenter"
+# token = "..."
+# management_url = "ws://serveragent:9901/api/events/ws"

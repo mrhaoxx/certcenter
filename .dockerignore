@@ -1,0 +1,16 @@
+# The build context is copied wholesale into the build stage, so anything
+# holding credentials must be excluded even though the final image keeps
+# only the binary — a stray secret in an intermediate layer is still a
+# secret that was handed to the daemon and may sit in the build cache.
+data/
+backups/
+*.db
+*.db-wal
+*.db-shm
+config.toml
+
+# Not needed to build, and large.
+.git/
+node_modules/
+web/node_modules/
+docs/

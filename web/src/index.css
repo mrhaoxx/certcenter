@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/* ─── Soft Console: design tokens ─────────────────────────────────────
+   Shared with plat101 so both consoles read as one system. Light-first,
+   generous whitespace, a single violet accent. Monospace is reserved for
+   identity: domains, serials, fingerprints, commands. Status is the colour
+   system. */
+@theme {
+  --color-paper: #f7f7fb;
+  --color-surface: #ffffff;
+  --color-sunk: #f5f4fa;
+  --color-ink: #1a1c24;
+  --color-muted: #6b7080;
+  --color-faint: #9aa0b0;
+  --color-line: #ecebf3;
+  --color-line-strong: #dedce9;
+
+  --color-accent: #6d5efc;
+  --color-accent-hi: #7d6ffd;
+  --color-accent-soft: #f1effe;
+
+  --color-run: #16a06a;
+  --color-run-soft: #e4f6ec;
+  --color-warm: #c07d18;
+  --color-warm-soft: #fdf1dd;
+  --color-idle: #8b93a2;
+  --color-idle-soft: #eef0f4;
+  --color-fail: #d9534f;
+  --color-fail-soft: #fbeceb;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code",
+    "Roboto Mono", Menlo, Consolas, monospace;
+}
+
+/* Dark theme. JS sets data-theme=light|dark on <html>, resolving the
+   user's light/dark/auto preference against prefers-color-scheme, so the
+   toggle is instant and a manual override beats the OS. */
+:root[data-theme="dark"] {
+  --color-paper: #0e0f15;
+  --color-surface: #161821;
+  --color-sunk: #1b1e28;
+  --color-ink: #e9eaef;
+  --color-muted: #9aa1b2;
+  --color-faint: #656c7c;
+  --color-line: #262a35;
+  --color-line-strong: #343a48;
+
+  --color-accent: #8b80ff;
+  --color-accent-hi: #9d93ff;
+  --color-accent-soft: #211f3a;
+
+  --color-run: #35c491;
+  --color-run-soft: #10271e;
+  --color-warm: #d79b40;
+  --color-warm-soft: #2a2012;
+  --color-idle: #7c8494;
+  --color-idle-soft: #1c2029;
+  --color-fail: #e46a60;
+  --color-fail-soft: #2b1614;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.mono,
+code,
+kbd {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-variant-ligatures: none;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-faint);
+  background-clip: padding-box;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Structural eyebrow — a small uppercase domain label. */
+.eyebrow {
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  font-weight: 600;
+}
+
+/* The one live moment: an issuance in flight breathes. */
+@keyframes cell-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.pulse {
+  animation: cell-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
