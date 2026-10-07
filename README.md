@@ -33,7 +33,7 @@ docker compose up -d
 镜像是 `ghcr.io/mrhaoxx/certcenter`，由 GitHub Actions 在每次推送 `main` 和打 `v*` 标签时构建，多架构（amd64 / arm64），约 63MB，以 nonroot 运行。生产建议钉版本而不是 `latest`：
 
 ```yaml
-image: ghcr.io/mrhaoxx/certcenter:v0.1.2
+image: ghcr.io/mrhaoxx/certcenter:v0.1.3
 ```
 想跑自己的代码就把 compose 里的 `image:` 换成 `build: .`——镜像自带前端构建，两条路都不需要本机有 Node 或 Go。
 
@@ -69,7 +69,7 @@ docker compose pull && docker compose up -d
 Chart 发布在 `oci://ghcr.io/mrhaoxx/charts/certcenter`，版本号与镜像标签一致：
 
 ```bash
-helm install certcenter oci://ghcr.io/mrhaoxx/charts/certcenter --version 0.1.2 \
+helm install certcenter oci://ghcr.io/mrhaoxx/charts/certcenter --version 0.1.3 \
   --set config.sessionKey="$(openssl rand -hex 32)" \
   --set config.passwordHash='<htpasswd 生成的散列>'
 ```
