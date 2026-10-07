@@ -1,0 +1,30 @@
+# Lint/template fixture: hostPath data plus two local-deploy mounts.
+config:
+  sessionKey: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  bus:
+    url: ws://serveragent:9900/ws
+    token: t
+    managementUrl: ws://serveragent:9901/api/events/ws
+  extra: |
+    # appended verbatim
+persistence:
+  type: hostPath
+  hostPath:
+    path: /srv/certcenter
+localDeploy:
+  fixPermissions: true
+  hostPaths:
+    - name: nginx
+      hostPath: /etc/nginx/certs
+      mountPath: /host/nginx
+    - name: haproxy
+      hostPath: /etc/haproxy/certs
+      mountPath: /host/haproxy
+nodeSelector:
+  kubernetes.io/hostname: edge-1
+ingress:
+  enabled: true
+  host: certs.example.com
+  tls:
+    - secretName: certcenter-tls
+      hosts: [certs.example.com]

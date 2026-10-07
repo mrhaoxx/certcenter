@@ -1,0 +1,17 @@
+{{- if and (eq .Values.persistence.type "pvc") (not .Values.persistence.pvc.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "certcenter.fullname" . }}-data
+  labels:
+    {{- include "certcenter.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.pvc.accessModes | nindent 4 }}
+  {{- with .Values.persistence.pvc.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.pvc.size }}
+{{- end }}

@@ -1,0 +1,146 @@
+# Default values for certcenter.
+
+image:
+  repository: ghcr.io/mrhaoxx/certcenter
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# ─── Configuration ──────────────────────────────────────────────────────
+# Rendered into config.toml and stored in a Secret. Ignored when
+# existingSecret is set.
+config:
+  # HMAC key for session tokens, at least 32 bytes. REQUIRED.
+  # Generate with: openssl rand -hex 32
+  sessionKey: ""
+  username: admin
+  # Seeds the admin password on first boot only; the database is
+  # authoritative afterwards. This hash is the password "admin".
+  # Generate a replacement with: htpasswd -nbBC 12 "" "your-password" | cut -d: -f2
+  passwordHash: "$2b$12$frYPFyn9.CpYoHj6aHLe6.jFGKC9a8DjotMrNuVhNgk5hjY3IOJJy"
+  dnsVerification:
+    skip: false
+    # dohServer: https://cloudflare-dns.com/dns-query
+    # maxRetries: 12
+  # ServerAgent bus; leave empty to run standalone.
+  bus: {}
+  #  url: ws://serveragent:9900/ws
+  #  serviceId: certcenter
+  #  token: "..."
+  #  managementUrl: ws://serveragent:9901/api/events/ws
+  # Raw TOML appended verbatim, for anything not modelled above.
+  extra: ""
+
+# Name of a Secret holding a complete config.toml under the key
+# "config.toml". When set, the config block above is not rendered.
+existingSecret: ""
+
+# External base URL of the console (-external-url). https turns on Secure
+# cookies and the Origin check. Defaults to the ingress host when ingress
+# is enabled, otherwise unset.
+externalUrl: ""
+# Extra command-line arguments, e.g. ["-extra-origins", "https://a,https://b"].
+extraArgs: []
+
+# ─── Storage for /data (SQLite database, backups) ───────────────────────
+persistence:
+  # pvc | hostPath | emptyDir
+  # hostPath pins the pod to one node (set nodeSelector) but keeps the
+  # database on a path you can back up and inspect from the host.
+  type: pvc
+  pvc:
+    existingClaim: ""
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+    size: 1Gi
+  hostPath:
+    path: /var/lib/certcenter
+    type: DirectoryOrCreate
+    # The image runs as uid 65532 and a freshly created host directory is
+    # root-owned, so an init container chowns it first. Disable if the
+    # directory is already writable by that uid.
+    fixPermissions: true
+
+# ─── Local deployment ───────────────────────────────────────────────────
+# Node directories mounted into the pod so that "local_write" pipeline
+# steps can drop certificates straight onto the host, e.g. for an nginx
+# running on the node. Each entry becomes a hostPath volume; point the
+# step's path at mountPath.
+localDeploy:
+  hostPaths: []
+  #  - name: nginx-certs
+  #    hostPath: /etc/nginx/certs
+  #    mountPath: /host/nginx-certs
+  #    type: DirectoryOrCreate
+  # chown each directory to uid 65532 at startup (same caveat as above).
+  fixPermissions: false
+
+# Image used by the permission-fixing init containers.
+initImage:
+  repository: busybox
+  tag: "1.37"
+  pullPolicy: IfNotPresent
+
+# ─── Networking ─────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 3001
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: certs.example.com
+  path: /
+  pathType: Prefix
+  tls: []
+  #  - secretName: certcenter-tls
+  #    hosts: [certs.example.com]
+
+# ─── Pod ────────────────────────────────────────────────────────────────
+# SQLite is single-writer, so the Deployment is fixed at one replica with
+# the Recreate strategy; there is no knob for it.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 30
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 10
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}

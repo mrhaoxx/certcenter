@@ -1,0 +1,24 @@
+CertCenter {{ .Chart.AppVersion }} is installed as release {{ .Release.Name }}.
+
+{{- if .Values.ingress.enabled }}
+Console: {{ include "certcenter.externalUrl" . }}
+{{- else }}
+Console (port-forward):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "certcenter.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  open http://localhost:{{ .Values.service.port }}
+{{- end }}
+
+Sign in as {{ .Values.config.username }}. If you kept the default passwordHash the
+password is "admin" — change it from the console right away; the hash only
+seeds the first boot.
+
+Data: {{ .Values.persistence.type }}
+{{- if eq .Values.persistence.type "hostPath" }} at {{ .Values.persistence.hostPath.path }} on the node — set nodeSelector so the pod stays there.{{ end }}
+{{- if eq .Values.persistence.type "emptyDir" }} — the database is lost when the pod restarts.{{ end }}
+{{- with .Values.localDeploy.hostPaths }}
+
+Local deployment mounts (use these paths in local_write steps):
+{{- range . }}
+  {{ .mountPath }}  ->  node:{{ .hostPath }}
+{{- end }}
+{{- end }}

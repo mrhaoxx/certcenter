@@ -64,6 +64,40 @@ docker compose pull && docker compose up -d
 
 数据库迁移在启动时自动执行且可重复运行，不需要手工步骤。
 
+## 用 Helm 部署
+
+Chart 发布在 `oci://ghcr.io/mrhaoxx/charts/certcenter`，版本号与镜像标签一致：
+
+```bash
+helm install certcenter oci://ghcr.io/mrhaoxx/charts/certcenter --version 0.1.2 \
+  --set config.sessionKey="$(openssl rand -hex 32)" \
+  --set config.passwordHash='<htpasswd 生成的散列>'
+```
+
+只有 `config.sessionKey` 是必填的；不填 `passwordHash` 则首次登录密码为 `admin`。`config.toml` 由 chart 渲染进 Secret，也可以用 `existingSecret` 指向自己维护的 Secret（键名 `config.toml`）。开启 `ingress` 后 `-external-url` 会自动按 ingress 的 host 推导。
+
+**存储**：`persistence.type` 可选 `pvc`（默认）、`hostPath` 或 `emptyDir`。hostPath 把数据库放在节点目录里，方便从宿主机备份，代价是 Pod 固定在那个节点，记得配 `nodeSelector`。镜像以 uid 65532 运行，chart 会用一个 init 容器把新建的宿主目录 chown 过去。
+
+**本地部署**：`localDeploy.hostPaths` 把节点上的目录挂进容器，流水线里的 `local_write` 步骤就能把证书直接写到宿主机，比如给跑在节点上的 nginx 用：
+
+```yaml
+persistence:
+  type: hostPath
+  hostPath: { path: /var/lib/certcenter }
+localDeploy:
+  fixPermissions: true
+  hostPaths:
+    - name: nginx
+      hostPath: /etc/nginx/certs
+      mountPath: /host/nginx
+nodeSelector:
+  kubernetes.io/hostname: edge-1
+```
+
+然后在部署目标里把 `local_write` 的路径指向 `/host/nginx/...`。完整参数见 `charts/certcenter/values.yaml`。
+
+Deployment 固定单副本、`Recreate` 策略，原因同上：SQLite 单写者。
+
 ## 从源码构建
 
 ```bash

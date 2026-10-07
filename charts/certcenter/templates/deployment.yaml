@@ -1,0 +1,157 @@
+{{- $fixData := and (eq .Values.persistence.type "hostPath") .Values.persistence.hostPath.fixPermissions -}}
+{{- $fixLocal := and .Values.localDeploy.fixPermissions (gt (len .Values.localDeploy.hostPaths) 0) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "certcenter.fullname" . }}
+  labels:
+    {{- include "certcenter.labels" . | nindent 4 }}
+spec:
+  # SQLite is single-writer: exactly one pod, and the old one must be gone
+  # before the new one opens the database.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "certcenter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "certcenter.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if not .Values.existingSecret }}
+        # Roll the pod when the rendered config changes.
+        checksum/config: {{ include "certcenter.configToml" . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "certcenter.serviceAccountName" . }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if or $fixData $fixLocal }}
+      initContainers:
+        # Host directories are created root-owned; hand them to the uid the
+        # service runs as. Runs as root only for this one step.
+        - name: fix-permissions
+          image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+          imagePullPolicy: {{ .Values.initImage.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              {{- if $fixData }}
+              chown {{ .Values.podSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.runAsGroup }} /data
+              chmod 700 /data
+              {{- end }}
+              {{- if $fixLocal }}
+              {{- range .Values.localDeploy.hostPaths }}
+              chown {{ $.Values.podSecurityContext.runAsUser }}:{{ $.Values.podSecurityContext.runAsGroup }} {{ .mountPath | quote }}
+              {{- end }}
+              {{- end }}
+          volumeMounts:
+            {{- if $fixData }}
+            - name: data
+              mountPath: /data
+            {{- end }}
+            {{- if $fixLocal }}
+            {{- range .Values.localDeploy.hostPaths }}
+            - name: local-{{ .name }}
+              mountPath: {{ .mountPath | quote }}
+            {{- end }}
+            {{- end }}
+      {{- end }}
+      containers:
+        - name: certcenter
+          image: {{ include "certcenter.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+            - -config
+            - /etc/certcenter/config.toml
+            {{- with (include "certcenter.externalUrl" .) }}
+            - -external-url
+            - {{ . | quote }}
+            {{- end }}
+            {{- range .Values.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/certcenter
+              readOnly: true
+            - name: data
+              mountPath: /data
+            {{- range .Values.localDeploy.hostPaths }}
+            - name: local-{{ .name }}
+              mountPath: {{ .mountPath | quote }}
+            {{- end }}
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ include "certcenter.configSecretName" . }}
+            items:
+              - key: config.toml
+                path: config.toml
+        - name: data
+          {{- if eq .Values.persistence.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.pvc.existingClaim | default (printf "%s-data" (include "certcenter.fullname" .)) }}
+          {{- else if eq .Values.persistence.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.persistence.hostPath.path | quote }}
+            type: {{ .Values.persistence.hostPath.type }}
+          {{- else if eq .Values.persistence.type "emptyDir" }}
+          emptyDir: {}
+          {{- else }}
+          {{- fail (printf "persistence.type must be pvc, hostPath or emptyDir, got %q" .Values.persistence.type) }}
+          {{- end }}
+        {{- range .Values.localDeploy.hostPaths }}
+        - name: local-{{ .name }}
+          hostPath:
+            path: {{ required "localDeploy.hostPaths[].hostPath is required" .hostPath | quote }}
+            type: {{ .type | default "DirectoryOrCreate" }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

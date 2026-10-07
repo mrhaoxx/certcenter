@@ -47,6 +47,17 @@ jobs:
       - name: Build binary
         run: CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" ./cmd/certcenter
 
+      - uses: azure/setup-helm@v4
+
+      # Lint and render the chart against each fixture under charts/certcenter/ci
+      # so a template error fails here, not at the first helm install.
+      - name: Lint chart
+        run: |
+          for f in charts/certcenter/ci/*-values.yaml; do
+            helm lint charts/certcenter -f "$f"
+            helm template ci charts/certcenter -f "$f" > /dev/null
+          done
+
   image:
     name: Image
     needs: test
@@ -91,3 +102,27 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  chart:
+    name: Chart
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # Chart version = tag without the v; appVersion = the tag, which is
+      # also the image tag the chart pulls by default.
+      - name: Package and push
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          helm package charts/certcenter --version "${tag#v}" --app-version "$tag" -d dist
+          helm push "dist/certcenter-${tag#v}.tgz" oci://ghcr.io/${{ github.repository_owner }}/charts
